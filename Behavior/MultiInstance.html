@@ -1,0 +1,49 @@
+<link rel="import" href="../scripts/namespace.html">
+<script type="text/javascript">
+    namespace('App.Behaviors', function(namespace) {
+        'use strict';
+
+        /**
+         * holds all the created instalces of elements that extend this behaviur
+         * we need references to all the elements so we will be able to
+         * fire global event to every component that uses this component
+         * @type {Object}
+         */
+        var instances = {};
+
+        namespace.MultiInstance = {
+            /**
+             * when the element is attached then we add the instance to the shared
+             * instance structure
+             */
+            ready: function() {
+                var tagName = this.tagName;
+
+                if (!(tagName in instances)) {
+                    instances[tagName] = [];
+                }
+
+                instances[tagName].push(this);
+            },
+            /**
+             * when an element is detached the we need to also remove it
+             * form the shared instance structure
+             */
+            detached: function() {
+                var tagInstances = instances[this.tagName];
+                tagInstances.splice(tagInstances.indexOf(this), 1);
+            },
+
+            /**
+             * fires an event on all shared instances
+             */
+            fireOnAll: function() {
+                var tagInstances = instances[this.tagName];
+
+                for (var i = 0; i < tagInstances.length; i++) {
+                    Polymer.Base.fire.apply(tagInstances[i], arguments);
+                }
+            }
+        };
+    });
+</script>

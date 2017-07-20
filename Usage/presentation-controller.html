@@ -1,0 +1,305 @@
+<link rel="import" href="../bower_components/polymer/polymer.html">
+<link rel="import" href="../bower_components/iron-ajax/iron-request.html">
+<link rel="import" href="../bower_components/iron-signals/iron-signals.html">
+<link rel="import" href="./tool-bar/tool-bar.html">
+<link rel="import" href="./navigation-bar/navigation-bar.html">
+<link rel="import" href="./presentation-view.html">
+<link rel="import" href="./session-state/session-state-handler.html">
+<link rel="import" href="./top-bar/top-bar.html">
+<link rel="import" href="./package-server/package-server.html">
+<link rel="import" href="./manifest-reader/manifest-reader.html">
+<link rel="import" href="./accommodations-controller/accommodations-controller.html">
+<link rel="import" href="../scripts/toolsArray.html">
+<link rel="import" href="./voice-response-controller/voice-response-controller.html">
+<link rel="import" href="./client-settings.html">
+<link rel="import" href="./tools/reference-guide-tool/reference-guide-tool.html">
+<!-- IRE Modul -->
+<link rel="import" href="../bower_components/item-rendering-engine/interactions/behaviors/EliminateAnswer.html">
+<!-- IRE Modul -->
+<dom-module id="presentation-controller">
+    <template>
+        <style>
+            :host {
+                @apply(--display-flex-mixin);
+                @apply(--flex-direction-column-mixin);
+                height: 100%;
+                overflow: hidden;
+                width: 100%;
+            }
+
+            #toolContainer *[state="active"] {
+                display: block;
+                height: 100%;
+                width: 100%;
+            }
+
+            #toolContainer *[state="inactive"] {
+                display: none;
+            }
+        </style>
+        <top-bar tools="{{tools}}"></top-bar>
+        <navigation-bar current-page="{{currentPage}}" items="[[items]]" current-item="{{currentItem}}"></navigation-bar>
+        <presentation-view eliminate-answer-is-active="{{eliminateAnswerIsActive}}" current-page="{{currentPage}}" items="[[items]]" tools="{{tools}}" current-item="{{currentItem}}"></presentation-view>
+        <tool-bar tools="{{tools}}" current-page="[[currentPage]]"></tool-bar>
+        <session-state-handler id="sessionState" items="[[items]]" current-page="[[currentPage]]" current-item="[[currentItem]]"></session-state-handler>
+        <user-session id="userSession" on-session-selected="sessionSelected" on-session-destroyed="destroy" on-package-destroyed="destroy" on-session-completed="destroy"></user-session>
+        <package-server id="packageServer" href="[[packageSrc]]" iv="[[packageIV]]" key="[[packageKey]]" on-package-ready="packageReady"></package-server>
+        <manifest-reader id="manifestReader" items="{{items}}"></manifest-reader>
+        <accommodations-controller tools="{{tools}}" current-item="[[currentItem]]" user-selected-tools="{{userSelectedTools}}" session-metadata="{{sessionMetadata}}"></accommodations-controller>
+        <voice-response-controller is-practice="[[isPractice]]"></voice-response-controller>
+        <client-settings id="clientSettings" on-ready="_setupIREConfig"></client-settings>
+        <iron-signals
+            on-iron-signal-practice-test-selected="practiceTestSelected"
+            on-iron-signal-retry-test-load="retryTestLoad"
+            on-iron-signal-init-test-state-service="initTestState"
+            on-iron-signal-directions-item-tool-ready="directionItemToolReady" ></iron-signals>
+
+        <template is="dom-repeat" items="{{tools}}" as="tool">
+            <template is="dom-if" if="{{_parseTool(tool, 'reference-guide-tool')}}">
+                <reference-guide-tool state="{{tool.state}}" current-page="[[currentPage]]" item="[[currentItem]]"></reference-guide-tool>
+            </template>
+        </template>
+    </template>
+    <script type="text/javascript">
+    (function() {
+
+        function ajaxRequest() {
+            return document.createElement('iron-request');
+        }
+
+        Polymer({
+            is: 'presentation-controller',
+
+            properties: {
+                tools: {
+                    type: Array,
+                    value: function() {
+                        return this.getDefaultTools();
+                    }
+                },
+                currentPage: {
+                    type: Number,
+                    notify: true
+                },
+                items: {
+                    type: Array,
+                    value: [],
+                    notify: true
+                },
+
+                packageSrc: String,
+                packageIV: String,
+                packageKey: String,
+                currentItem: {
+                    type: Object
+                },
+                isPractice: Boolean,
+                userSelectedTools: {
+                    type: Array,
+                    value: function() {
+                        return [];
+                    }
+                }
+            },
+
+            behaviors: [
+                App.Interactions.Behaviors.EliminateAnswer
+            ],
+
+            observers: [
+                //direction tools fix
+                'observeToolsChanges(tools.*)'
+            ],
+
+            listeners: {
+                'response': '_onResponse',
+                'user-selected-tools-changed': '_onUserSelectedToolChanged',
+                'user-selected-tools-push': '_onUserSelectedToolPush',
+                'current-page-change': '_onCurrentPageChange'
+            },
+
+            setToolState: function(index, state) {
+                this.set('tools.' + index + '.state', state);
+            },
+
+            _parsePackageSrc: function(path) {
+                var archivePath = path.replace(/http(s|):\/\//i, '').split('/');
+                archivePath.splice(0, 1);
+
+                return '/' + archivePath.join('/');
+            },
+
+            _setupIREConfig: function() {
+                window.IREConfig = window.IREConfig || {};
+
+                window.IREConfig.useAnswerLabelWhenEliminated = this.$.clientSettings.get('useAnswerLabelWhenEliminated');
+            },
+
+            sessionSelected: function(e) {
+                //fire this so that default accommodations get reset between sessions
+                var accs  = this.$.userSession.get('accommodations');
+                accs && this.fire('iron-signal', {
+                    name: 'user-accommodations-ready',
+                    data: accs
+                });
+                var result = e.detail;
+                this.packageSrc = null; //set it to null in case of retry
+                this.packageIV = result.iv;
+                this.packageKey = result.key;
+                this.packageSrc = this._parsePackageSrc(result.path);
+                this.sessionMetadata = e.detail.metadata
+            },
+
+            destroy: function(e) {
+                this.$.sessionState.heartbeat().stop();
+                this.$.sessionState.testState().stop();
+                this.items = [];
+                this.packageSrc = null;
+                this.packageIV = null;
+                this.packageKey = null;
+                this.$.packageServer.clean();
+                this.currentPage = undefined;
+                this.tools = this.getDefaultTools();
+                this.userSelectedTools = [];
+                this.sessionMetadata = null;
+            },
+
+            initTestState: function() {
+                if (!this.isPractice) {
+                    this.$.sessionState.tryRestoreState().then(function() {
+                        this.$.sessionState.heartbeat().start();
+                        this.$.sessionState.testState().start();
+                    }.bind(this));
+                } else {
+                    this.currentPage = 1;
+                }
+            },
+
+            packageReady: function() {
+                this.$.packageServer.readAsBlobUrl('assessment_0.xml').then(function(href) {
+                    this.$.manifestReader.src = href;
+                    if (!this.$.userSession.get('isPractice')) {
+                        return this.$.userSession.startTest();
+                    }
+                }.bind(this));
+
+                this.$.packageServer.readAs('ref.html', 'text').then(function(data) {
+                    var referenceGuide = Polymer.dom(this.root).querySelector('reference-guide-tool');
+                    var refTool = this.tools.find(function (el) {
+                        return el.element === 'reference-guide-tool';
+                    });
+
+                    var index = this.tools.indexOf(refTool);
+                    var selector = 'tools.' + index + '.visible';
+
+                    this.set(selector, !!data);
+
+                    if (referenceGuide) {
+                        referenceGuide.setContent(data);
+                    }
+                }.bind(this));
+
+                this.$.packageServer.readAs('dir.html', 'text')
+                    .then(function(data) {
+                        var content = {
+                            name: "last-direction-item",
+                            data: data
+                        };
+                        this.fire('iron-signal', content);
+                    }.bind(this))
+                    .catch(function() {
+                        var content = {
+                            name: "last-direction-item",
+                            data: null
+                        };
+                        this.fire('iron-signal', content);
+                    }.bind(this));
+
+                this.$.packageServer.readAs('imsmanifest.xml', 'text').then(function(data) {
+                    this.$.manifestReader.imsManifest = data;
+                }.bind(this));
+            },
+
+            _onResponse: function(ev) {
+                this.fire('iron-signal', {
+                    name: 'response',
+                    data: ev.detail
+                });
+            },
+            _onUserSelectedToolChanged: function(ev) {
+                this.userSelectedTools = ev.detail;
+            },
+
+            _onUserSelectedToolPush: function(ev) {
+                var zoomEntry = ev.detail;
+                var index = this.userSelectedTools.findIndex(function(tool) {
+                    return tool.toolGuid == zoomEntry.toolGuid;
+                });
+                if (index === -1) {
+                    this.userSelectedTools.push(zoomEntry);
+                } else {
+                    this.userSelectedTools.splice(index, 1, zoomEntry);
+                }
+                this.notifyPath('userSelectedTools');
+            },
+
+            _onCurrentPageChange: function(ev) {
+                this.currentPage = ev.detail.value;
+            },
+
+            /** Helper function for determining if should render tool
+             * @private
+             * @param  {Object} tool object representing a tool entry
+             * @param  {String} type tool element as a string
+             * @return {Bolean}
+             */
+            _parseTool: function (tool, type) {
+                return (tool.element == type);
+            },
+
+            practiceTestSelected: function(e) {
+                var result = e.detail;
+                this.tools = this.getDefaultTools();
+                this.packageIV = result.iv;
+                this.packageKey = result.key;
+                this.packageSrc = result.formHref;
+            },
+            retryTestLoad: function() {
+                //Reset the href on the package-server to force it to reload the package
+                var href = this.packageSrc;
+                this.packageSrc = '';
+                this.packageSrc = href;
+            },
+            getDefaultTools: function() {
+                return App.getToolsArray();
+            },
+
+            // direction tools fix - begin
+            //                  TODO
+            //  to be removed when directions modal is redone
+            //  WARNING THIS IS A WORKAROUND. NOT A STANDARD BINDING METHOD
+            observeToolsChanges: function (structure) {
+                this.fireDirectionToolsEvent(structure);
+            },
+
+            directionItemToolReady: function () {
+                var structure = {
+                    path: "tools",
+                    value: this.tools,
+                    base: this.tools
+                };
+                this.fireDirectionToolsEvent(structure);
+            },
+
+            fireDirectionToolsEvent: function (structure) {
+                var ev = {
+                    name: 'direction-tools-changing',
+                    data: structure
+                };
+                this.fire('iron-signal', ev);
+            }
+            //direction tools fix - end
+        });
+    })();
+    </script>
+</dom-module>
