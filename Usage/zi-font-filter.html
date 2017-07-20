@@ -1,0 +1,155 @@
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+<link rel="import" href="../../bower_components/paper-checkbox/paper-checkbox.html">
+<link rel="import" href="../../bower_components/paper-dropdown-menu/paper-dropdown-menu-light.html">
+<link rel="import" href="../../bower_components/paper-dropdown-menu/paper-dropdown-menu.html">
+<link rel="import" href="../../bower_components/paper-listbox/paper-listbox.html">
+<link rel="import" href="../../bower_components/paper-item/paper-item.html">
+<link rel="import" href="../../bower_components/paper-slider/paper-slider.html">
+
+<link rel="import" href="../app-store/filter-store-view.html">
+<link rel="import" href="../app-store/fonts-store-view.html">
+<link rel="import" href="../app-store/ui-store-view.html">
+<link rel="import" href="../zi-dropdown/zi-dropdown.html">
+<link rel="import" href="../zi-google-fonts/zi-google-fonts.html">
+<link rel="import" href="../zi-group-options/zi-group-options.html">
+
+
+<dom-module id="zi-font-filter">
+  <template strip-whitespace>
+    <style include="zi-style-light"></style>
+    <style>
+      :host {
+        --paper-input-container-focus-color: var(--accent);
+      }
+
+      :host, paper-checkbox,
+      paper-dropdown-menu,
+      paper-listbox {
+        display: block;
+      }
+
+      h2 {
+        margin: 0;
+        padding: 15px 20px;
+        font-size: 17px;
+        text-transform: uppercase;
+        font-weight: 700;
+        user-select: none;
+        color: var( --primary-light );
+        border-bottom: 1px solid var( --light );
+      }
+
+      h2 em {
+        text-transform: lowercase;
+        font-size: 14px;
+        font-weight: 300;
+      }
+
+      h3 {
+        font-size: 12px;
+        color: var( --secondary-dark );
+        margin: 40px 20px 0;
+        font-weight: 300;
+        text-transform: uppercase;
+      }
+
+      zi-group-options {
+        padding: 5px 20px;
+      }
+
+      button {
+        margin: 20px 0 0 20px;
+      }
+    </style>
+
+    <ui-store-view id="uiview" ui="{{_ui}}" language-list="{{_langs}}"></ui-store-view>
+    <filter-store-view id="filterview" filter="{{_filter}}" sort-by="{{_sortBy}}"></filter-store-view>
+    <fonts-store-view id="fontsview"></fonts-store-view>
+
+    <zi-google-fonts fonts="{{_fonts}}" sort-by="[[_sortBy]]"></zi-google-fonts>
+
+    <h3>Sorting: [[_sortBy]]</h3>
+    <zi-dropdown items="[[_ui.sortByOptions]]" selected-index="[[_filter.sortby]]" on-zi-dropdown-select="_setSortBy"></zi-dropdown>
+    <h3>Languages</span></h3>
+    <zi-dropdown items="[[_langs]]" selected-index="[[_filter.languages.selected]]" on-zi-dropdown-select="_setLanguage"></zi-dropdown>
+    <h3>Categories</h3>
+    <zi-group-options all-on items="[[_ui.fontTypeOptions]]" on-zi-group-options-change="_setTypes"></zi-group-options>
+    <button on-click="_triggerFitler"><strong>Go to</strong> fonts <em>list</em></button>
+  </template>
+  <script>
+    Polymer({
+      is: 'zi-font-filter',
+      properties: {
+        /** The exposed to parent list of filtered and processed font objects. */
+        _fonts: {
+          type: Array,
+          observer: '_setFonts'
+        },
+        /**
+         * Local flag to keep track if we have notified parent for first
+         * response from google API font list load.
+         */
+        _signalledLoaded: {
+          type: Boolean,
+          value: false,
+        }
+      },
+
+
+      /**
+       * When google returns our fonts for the first time, notify parent about
+       * the event. Note that it will be fired before we can actually process
+       * the font list.
+       *
+       * FIXME: should not be used, instead use binding system.
+       */
+      _onFontsLoaded: function() {
+        if (!this._signalledLoaded) {
+          this._signalledLoaded = true;
+          this.fire('fonts-loaded');
+        }
+      },
+
+      _setSortBy: function(e) {
+        this.$.filterview.dispatch({
+          type: 'set-google-fonts-sort-by',
+          data: e.detail.index
+        });
+      },
+
+      _setLanguage: function(e) {
+        this.$.filterview.dispatch({
+          type: 'set-language-by-index',
+          data: e.detail.index
+        });
+      },
+
+      _setFonts: function() {
+        this.$.fontsview.dispatch({
+          type: 'set-font-list',
+          data: this._fonts
+        })
+      },
+
+      _setTypes: function(e) {
+        this.debounce('settypes', function() {
+          this.$.filterview.dispatch({
+            type: 'set-types',
+            data: e.detail.enabled
+          });
+        }, 600);
+      },
+
+
+      /**
+       * Helper to fire the fitler alteration.
+       *
+       * @private
+       * @param {!CustomEvent} e
+       */
+      _triggerFitler: function(e) {
+        this.fire('toggle-filter');
+      }
+    });
+  </script>
+</dom-module>

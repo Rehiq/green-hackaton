@@ -1,0 +1,98 @@
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+
+<link rel="import" href="./app-store-behavior.html">
+
+<!--
+  Provides view of the store exposing actions and props related to the
+  font filtering.
+-->
+<dom-module id="filter-store-view">
+  <script>
+  (function() {
+    window.App.registerActionHandler(
+        'set-search-term', (state, action) => {
+          return Object.assign({}, state, {
+            filter: Object.assign({}, state.filter, {
+              search: action.data
+            })
+          })
+        });
+
+    window.App.registerActionHandler(
+        'set-google-fonts-sort-by', (state, action) => {
+          return Object.assign({}, state, {
+            filter: Object.assign({}, state.filter, {
+              sortby: action.data
+            })
+          });
+        });
+
+    window.App.registerActionHandler(
+        'set-language-by-index', (state, action) => {
+          return Object.assign({}, state, {
+            filter: Object.assign({}, state.filter, {
+              languages: Object.assign({}, state.filter.languages, {
+                selected: action.data
+              })
+            })
+          });
+        });
+
+    window.App.registerActionHandler(
+        'set-types', (state, action) => {
+          return Object.assign({}, state, {
+            filter: Object.assign({}, state.filter, {
+              types: action.data
+            })
+          });
+        })
+
+    const selectSortByOptions = state => state.ui.sortByOptions;
+    const selectSortByIndex = state => state.filter.sortby;
+
+    const reselectSortBy = Reselect.createSelector(
+        selectSortByOptions, selectSortByIndex, (options, index) => {
+          if (!options.length) return undefined;
+          if (index >= options.length) {
+            throw new Error('Index out of bound');
+          }
+          return options[index];
+        });
+    Polymer({
+      is: 'filter-store-view',
+      behaviors: [window.App.StoreBehavior],
+      properties: {
+        /** The filter general object. */
+        filter: {
+          type: Object,
+          notify: true,
+          readOnly: true,
+          statePath: 'filter'
+        },
+
+        sortBy: {
+          type: String,
+          notify: true,
+          readOnly: true,
+          statePath: reselectSortBy
+        }
+      },
+
+
+      /**
+       * Sets the search term to be used in filtering.
+       * Note that this is done with delay by the component
+       * providing the values.
+       *
+       * @param {string} str
+       */
+      setSearchTerm: function(str) {
+        this.dispatch({
+          type: 'set-search-term',
+          data: str
+        });
+      }
+    });
+  })();
+  </script>
+</dom-module>

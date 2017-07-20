@@ -1,0 +1,75 @@
+<script src="../../node_modules/redux/dist/redux.js"></script>
+<script src="../../node_modules/reselect/dist/reselect.js"></script>
+
+<link rel="import" href="../../bower_components/polymer-redux/polymer-redux.html">
+
+<script>
+window.App = window.App || {};
+/**
+ * @polymerBehavior
+ * @memberof window.App
+ */
+window.App.StoreBehavior = (function() {
+let actionHandlers = {};
+let defaultState = {
+  ui: {
+    responsiveWidth: '1024px',
+    drawerWidth: '375px',
+    selectedTab: 1,
+    urlInputPlaceholder: 'Type in the address of your website',
+    filterOpened: false,
+    sortByOptions: [
+      'trending',
+      'popularity',
+      'date',
+      'alpha'
+    ],
+    fontTypeOptions: [
+      'serif',
+      'sans-serif',
+      'display',
+      'handwriting',
+      'monospace'
+    ]
+  },
+  fonts: [],
+  filter: {
+    search: '',
+    sortby: 0,
+    types: null,
+    languages: {
+      available: [],
+      selected: 0
+    }
+  },
+  settings: {
+    body: { font: null },
+    titles: { font: null }
+  },
+  frame: { url: '' }
+};
+
+let store = Redux.createStore((state, action) => {
+  if (!state) return defaultState;
+  if (actionHandlers.hasOwnProperty(action.type)) {
+    console.info(`Executing action: [${action.type}]`);
+    return actionHandlers[action.type](state, action);
+  } else {
+    console.warn('Action has no handler: ' + action.type);
+    return state;
+  }
+}, window.devToolsExtension && window.devToolsExtension());
+
+window.App = window.App || {};
+window.App.registerActionHandler = (name, handler) => {
+  if (actionHandlers.hasOwnProperty(name)) {
+    throw new Error('Action already registered: ' + name);
+  }
+  if (typeof handler != 'function') {
+    throw new Error('Handler must be a function');
+  }
+  actionHandlers[name] = handler;
+};
+return PolymerRedux(store);
+})();
+</script>

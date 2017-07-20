@@ -1,0 +1,100 @@
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+
+<link rel="import" href="./app-store-behavior.html">
+
+<!--
+  Provides view of the store exposing actions and props related to the
+  font filtering.
+-->
+<dom-module id="fonts-store-view">
+  <script>
+  (function() {
+
+    let filterOutKhmerFonts = fonts => fonts.filter(f => f.subsets.indexOf('khmer') == -1);
+    let extractLanguages = fonts => {
+      let list = [];
+      fonts.forEach(f => {
+        f.subsets.forEach(subset => {
+          if (list.indexOf(subset) == -1) list.push(subset);
+        });
+      });
+      list.unshift('all');
+      return list;
+    };
+
+    // alter everything that depends on font list...
+    window.App.registerActionHandler(
+        'set-font-list', (state, action) => {
+          let fonts = filterOutKhmerFonts(action.data);
+          let languages = extractLanguages(fonts);
+
+          return Object.assign({}, state, {
+            fonts: fonts,
+            filter: Object.assign({}, state.filter, {
+              languages: Object.assign({}, state.filter.languages, {
+                available: languages
+              })
+            })
+          });
+        });
+
+    const selectSearchTerm = state => state.filter.search;
+    const selectFonts = state => state.fonts;
+    const selectTypes = state => state.filter.types;
+    const selectLanguages = state => state.filter.languages.available;
+    const selectLanguageIndex = state => state.filter.languages.selected;
+
+    const reselectLanguge = Reselect.createSelector(
+        selectLanguages, selectLanguageIndex, (langs, idx) => {
+          if (!langs.length) return 'all';
+          if (idx < 0 || idx >= langs.length) throw new Error('Index out of bound');
+          return langs[idx];
+        });
+
+    const reselectFonts = Reselect.createSelector(
+        selectFonts,
+        selectSearchTerm,
+        selectTypes,
+        reselectLanguge,
+        (fonts, search, types, lang) => {
+          let result = fonts;
+          if (types && types.length) {
+            result = result.filter(font => (types.indexOf(font.category) != -1));
+          }
+          if (search) {
+            result = result.filter(font => (font.family.toLowerCase().indexOf(search.toLowerCase()) != -1));
+          }
+          if (lang != 'all') {
+            result = result.filter(font => (font.subsets.indexOf(lang) != -1));
+          }
+          return result;
+        });
+
+
+    Polymer({
+      is: 'fonts-store-view',
+      behaviors: [window.App.StoreBehavior],
+      properties: {
+        /** The fonts list after it being filtered */
+        fonts: {
+          type: Array,
+          notify: true,
+          readOnly: true,
+          statePath: reselectFonts
+        }
+      },
+      /**
+       * Sets the fonts list as received from Google API.
+       *
+       * @param {Array<Object>} fonts
+       */
+      setFontList: function(fonts) {
+        this.dispatch({
+          type: 'set-font-list',
+          data: fonts
+        });
+      }
+    });
+  })();
+  </script>
+</dom-module>

@@ -1,0 +1,122 @@
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+
+<link rel="import" href="./app-store-behavior.html">
+
+
+<dom-module id="ui-store-view">
+  <script>
+  (function() {
+    window.App.registerActionHandler(
+        'set-active-tab-index', (state, action) => {
+          return Object.assign({}, state, {
+            ui: Object.assign({}, state.ui, {
+              selectedTab: action.data
+            })
+          });
+        });
+    window.App.registerActionHandler(
+        'set-filter-opened', (state, action) => {
+          return Object.assign({}, state, {
+            ui: Object.assign({}, state.ui, {
+              filterOpened: action.data
+            })
+          });
+        });
+
+    const selectResponsiveWidth = state => state.ui.responsiveWidth;
+    const selectUrl = state => state.frame.url;
+    const selectBodyFont = state => state.settings.body.font;
+    const selectTitlesFont = state => state.settings.titles.font;
+    const selectAvailableLanguages = state => state.filter.languages.available;
+    const selectLanguageIndex = state => state.filter.languages.selected;
+    const tweakLanguageLabel = lang => lang ? lang.replace('-ext', ' Extended') : undefined;
+    const selectEnabledFontTypes = state => state.filter.types || [];
+
+    const reselectMaxWidthQuery = Reselect.createSelector(
+        selectResponsiveWidth, width => `(max-width:${width})`);
+    const reselectMinWidthQuery = Reselect.createSelector(
+        selectResponsiveWidth, width => `(min-width:${width})`);
+    const reselectDisableShareAndDownload = Reselect.createSelector(
+        selectUrl, selectBodyFont, selectTitlesFont,
+        (url, body, titles) => (!(url && (body || titles))));
+    const reselectLanguageList = Reselect.createSelector(
+        selectAvailableLanguages, langs => langs.map(
+            lang => lang.replace('-ext', '.Extended')));
+    const reselectFilterLabelItems = Reselect.createSelector(
+        selectAvailableLanguages, selectLanguageIndex, selectEnabledFontTypes,
+        (langs, idx, types) => {
+          let list = langs[idx] ? [tweakLanguageLabel(langs[idx]), ...types] : types;
+          return list.map(s => s.replace(/^(.)/, m => m.toUpperCase()).replace(/-(.)/, m => m.toUpperCase()));
+        });
+
+
+    Polymer({
+      is: 'ui-store-view',
+      behaviors: [window.App.StoreBehavior],
+      properties: {
+        ui: {
+          type: Object,
+          notify: true,
+          readOnly: true,
+          statePath: 'ui'
+        },
+        maxWidthQuery: {
+          type: String,
+          notify: true,
+          readOnly: true,
+          statePath: reselectMaxWidthQuery
+        },
+        minWidthQuery: {
+          type: String,
+          notify: true,
+          readOnly: true,
+          statePath: reselectMinWidthQuery
+        },
+        disbaleShareAndDownload: {
+          type: Boolean,
+          notify: true,
+          readOnly: true,
+          statePath: reselectDisableShareAndDownload
+        },
+        languageList: {
+          type: Array,
+          notify: true,
+          readOnly: true,
+          statePath: reselectLanguageList
+        },
+        filterLabelItems: {
+          type: Array,
+          notify: true,
+          readOnly: true,
+          statePath: reselectFilterLabelItems
+        }
+      },
+
+      /**
+       * Allows the user to set which tab is currently selected.
+       *
+       * @param {number} index
+       */
+      setSelectedTab: function(index) {
+        this.dispatch({
+          type: 'set-active-tab-index',
+          data: index
+        });
+      },
+
+
+      /**
+       * Sets the filter opened state. The filter is to filter fonts.
+       *
+       * @param {boolean} opened
+       */
+      setFilterOpened: function(opened) {
+        this.dispatch({
+          type: 'set-filter-opened',
+          data: opened
+        });
+      }
+    });
+  })();
+  </script>
+</dom-module>
